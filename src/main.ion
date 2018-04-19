@@ -1,0 +1,272 @@
+#foreign(include = "<stdio.h>")
+#foreign(include = "<stdlib.h>")
+#foreign(include = "<float.h>") // FLT_MAX
+
+@foreign
+var FLT_MAX : float;
+
+@foreign
+func printf(fmt: char const*, ...): int;
+
+//
+// Math
+//
+
+#foreign(include = "<math.h>")
+
+@foreign
+func sqrtf(f: float): float;
+
+@foreign
+func cosf(f: float): float;
+
+@foreign
+func sinf(f: float): float;
+
+@foreign
+func tanf(f: float): float;
+
+var PI : float = 3.1415926;
+
+struct v3 {
+  x, y, z: float;
+}
+
+func add3(a: v3, b: v3): v3 {
+  return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+
+func sub3(a: v3, b: v3): v3 {
+  return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+func mul3(a: v3, f: float): v3 {
+  return {a.x * f, a.y * f, a.z * f};
+}
+
+func div3(a: v3, f: float): v3 {
+  return {a.x / f, a.y / f, a.z / f};
+}
+
+func dot3(a: v3, b: v3): float {
+  return a.x*b.x + a.y*b.y + a.z*b.z;
+}
+
+func cross3(a: v3, b: v3): v3 {
+  return {a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x};
+}
+
+func len_sqr3(a: v3): float {
+  return dot3(a, a);
+}
+
+func len3(a: v3): float {
+  return sqrtf(dot3(a, a));
+}
+
+func unit3(a: v3): v3 {
+  return mul3(a, 1/len3(a));
+}
+
+func lerp3(a: v3, t: float, b: v3): v3 {
+  return add3(mul3(a, (1-t)), mul3(b, t));
+}
+
+func xorshift32(state: uint32*): uint32 {
+  x : uint32 = state[0];
+  x ^= x << 13;
+  x ^= x >> 17;
+  x ^= x << 5;
+  state[0] = x;
+  return x;
+}
+
+func randf(state: uint32*): float {
+  return (xorshift32(state) & 0xFFFFFF) / 16777216.0;
+}
+
+func rand_unit3(state: uint32*): v3 {
+  z := randf(state) * 2.0 - 1.0;
+  a := randf(state) * 2.0 * PI;
+  r := sqrtf(1.0 - z * z);
+  x := r * cosf(a);
+  y := r * sinf(a);
+  return {x, y, z};
+}
+
+//
+// Main
+//
+
+struct ray_t {
+  origin: v3;
+  dir: v3;
+}
+
+struct hit_t {
+  t: float;
+  point: v3;
+  normal: v3;
+}
+
+struct sphere_t {
+  position: v3;
+  radius: float;
+}
+
+struct camera_t {
+  position: v3;
+  film_h: v3;
+  film_v: v3;
+  film_lower_left: v3;
+}
+
+struct world_t {
+  camera: camera_t;
+  spheres: sphere_t*;
+  sphere_count: int;
+  rng_state: uint32;
+}
+
+struct image_t {
+  width, height : int;
+}
+
+func point_on_ray(ray: ray_t*, t: float): v3 {
+  return add3(ray.origin, mul3(ray.dir, t));
+}
+
+func sphere_test(sphere: sphere_t*, ray: ray_t*, tmin: float, tmax: float, hit: hit_t*): bool {
+  oc := sub3(ray.origin, sphere.position);
+  a := len_sqr3(ray.dir);
+  b := dot3(oc, ray.dir);
+  c := len_sqr3(oc) - sphere.radius*sphere.radius;
+  discriminant := b*b - a*c;
+  if (discriminant > 0.0) {
+    temp := (-b - sqrtf(discriminant))/a;
+    if (temp < tmax && temp > tmin) {
+      hit.t = temp;
+      hit.point = point_on_ray(ray, temp);
+      hit.normal = div3(sub3(hit.point, sphere.position), sphere.radius);
+      return true;
+    }
+    temp = (-b + sqrtf(discriminant))/a;
+    if (temp < tmax && temp > tmin) {
+      hit.t = temp;
+      hit.point = point_on_ray(ray, temp);
+      hit.normal = div3(sub3(hit.point, sphere.position), sphere.radius);
+      return true;
+    }
+  }
+  return false;
+}
+
+func cast(ray: ray_t*, world: world_t*, tmin: float, tmax: float, bounces: int): v3 {
+  hit : hit_t;
+  has_hit_something := false;
+  closest_hit_dist := tmax;
+  for (i := 0; i<world.sphere_count; i++) {
+    if (sphere_test(&world.spheres[i], ray, tmin, closest_hit_dist, &hit)) {
+      has_hit_something = true;
+      closest_hit_dist = hit.t;
+    } 
+  }
+  if (has_hit_something && bounces > 0) {
+    target := add3(hit.point, add3(hit.normal, rand_unit3(&world.rng_state)));
+    bounce_ray := ray_t{
+      origin=hit.point,
+      dir=sub3(target, hit.point),
+    };
+    return mul3(cast(&bounce_ray, world, tmin, tmax, bounces-1), 0.5);
+  }
+  unit_dir := unit3(ray.dir);
+  t := 0.5*(unit_dir.y + 1.0);
+  return lerp3(v3{1,1,1}, t, v3{0.5, 0.7, 1.0});
+}
+
+func create_camera(from: v3, to: v3, up: v3, vfov: float, aspect: float): camera_t {
+  theta := vfov * PI / 180;
+  half_height := tanf(theta/2);
+  half_width := aspect * half_height;
+  w := unit3(sub3(from, to));
+  u := unit3(cross3(up, w));
+  v := cross3(w, u);
+  ll1 := sub3(from, mul3(u, half_width));
+  ll2 := sub3(ll1, mul3(v, half_height));
+  ll3 := sub3(ll2, w);
+  return {
+    position = from,
+    film_h = mul3(u, 2*half_width),
+    film_v = mul3(v, 2*half_height),
+    film_lower_left = ll3,
+  };
+}
+
+func camera_ray(c: camera_t*, u: float, v: float): ray_t {
+  return {
+    origin = c.position,
+    dir = sub3(add3(c.film_lower_left, add3(mul3(c.film_h, u), mul3(c.film_v, v))), c.position),
+  };
+}
+
+func main(argc: int, argv: char**): int {
+  img := image_t{
+    width = 800,
+    height = 400,
+  };
+
+  printf("P3\n");
+  printf("%d %d\n255\n", img.width, img.height);
+
+  spheres : sphere_t[] = {
+    {
+      position = v3{-1, 0.5, 1},
+      radius = 0.5,
+    },
+    {
+      position = v3{1, 1, 1},
+      radius = 1.0,
+    },
+    {
+      position = v3{0, 0.25, -0.5},
+      radius = 0.25,
+    },
+    {
+      position = v3{0, -100, 1},
+      radius = 100,
+    },
+  };
+
+  world := world_t {
+    camera = create_camera(v3{0, 1.5, -5}, v3{0, 0.5, 1}, v3{0, 1, 0}, 45, img.width/img.height),
+    spheres = spheres,
+    sphere_count = 4,
+    rng_state = 1,
+  };
+
+  rays_per_pixel := 100;
+  max_bounces := 10;
+  for (y := img.height-1; y >= 0; y--) {
+    for (x := 0; x < img.width; x++) {
+      pixel := v3{0,0,0};
+      for (s := 0; s < rays_per_pixel; s++) {
+        u := (:float)(x+randf(&world.rng_state)) / (:float)img.width;
+        v := (:float)(y+randf(&world.rng_state)) / (:float)img.height;
+
+        ray := camera_ray(&world.camera, u, v);
+        pixel = add3(pixel, cast(&ray, &world, 0.001, FLT_MAX, max_bounces));
+      }
+      pixel = div3(pixel, rays_per_pixel);
+      pixel = v3{sqrtf(pixel.x), sqrtf(pixel.y), sqrtf(pixel.z)};
+
+      r := (:int)(255.99*pixel.x);
+      g := (:int)(255.99*pixel.y);
+      b := (:int)(255.99*pixel.z);
+
+      printf("%d %d %d\n", r, g, b);
+    }
+  }
+  printf("\n");
+  return 0;
+}
+
