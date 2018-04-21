@@ -5,6 +5,8 @@ Writing a very simple ray tracer to play with [Ion](https://github.com/pervognse
 ./m
 
 # run
-./build/app > test.ppm
+./build/app
 ```
+
+Will produce `scene.tga`.
 
