@@ -1,7 +1,7 @@
 #!/bin/sh
 
 CXX="clang"
-ION_PKG="src"
+ION_PKG="ray"
 
 mkdir -p build
 ion $ION_PKG "build/main.c"
