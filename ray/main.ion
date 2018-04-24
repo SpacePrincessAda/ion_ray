@@ -14,89 +14,6 @@ struct FILE;
 @foreign func fwrite(buffer: void const*, size: usize, count: usize, stream: FILE*): usize;
 @foreign func putc(ch: int, stream: FILE*): int;
 
-//
-// Math
-//
-
-#foreign(header = "<math.h>")
-
-@foreign func sqrtf(f: float): float;
-@foreign func cosf(f: float): float;
-@foreign func sinf(f: float): float;
-@foreign func tanf(f: float): float;
-
-var PI : float = 3.1415926;
-
-struct v3 {
-  x, y, z: float;
-}
-
-func add3(a: v3, b: v3): v3 {
-  return {a.x + b.x, a.y + b.y, a.z + b.z};
-}
-
-func sub3(a: v3, b: v3): v3 {
-  return {a.x - b.x, a.y - b.y, a.z - b.z};
-}
-
-func mul3(a: v3, f: float): v3 {
-  return {a.x * f, a.y * f, a.z * f};
-}
-
-func div3(a: v3, f: float): v3 {
-  return {a.x / f, a.y / f, a.z / f};
-}
-
-func dot3(a: v3, b: v3): float {
-  return a.x*b.x + a.y*b.y + a.z*b.z;
-}
-
-func cross3(a: v3, b: v3): v3 {
-  return {a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x};
-}
-
-func len_sqr3(a: v3): float {
-  return dot3(a, a);
-}
-
-func len3(a: v3): float {
-  return sqrtf(dot3(a, a));
-}
-
-func unit3(a: v3): v3 {
-  return mul3(a, 1/len3(a));
-}
-
-func lerp3(a: v3, t: float, b: v3): v3 {
-  return add3(mul3(a, (1-t)), mul3(b, t));
-}
-
-func xorshift32(state: uint32*): uint32 {
-  x : uint32 = state[0];
-  x ^= x << 13;
-  x ^= x >> 17;
-  x ^= x << 5;
-  state[0] = x;
-  return x;
-}
-
-func randf(state: uint32*): float {
-  return (xorshift32(state) & 0xFFFFFF) / 16777216.0;
-}
-
-func rand_unit3(state: uint32*): v3 {
-  z := randf(state) * 2.0 - 1.0;
-  a := randf(state) * 2.0 * PI;
-  r := sqrtf(1.0 - z * z);
-  x := r * cosf(a);
-  y := r * sinf(a);
-  return {x, y, z};
-}
-
-//
-// Main
-//
-
 struct ray_t {
   origin: v3;
   dir: v3;
@@ -139,6 +56,7 @@ func point_on_ray(ray: ray_t*, t: float): v3 {
 func sphere_test(sphere: sphere_t*, ray: ray_t*, tmin: float, tmax: float, hit: hit_t*): bool {
   oc := sub3(ray.origin, sphere.position);
   a := len_sqr3(ray.dir);
+  r := div3(v3{1,1,1}, 1);
   b := dot3(oc, ray.dir);
   c := len_sqr3(oc) - sphere.radius*sphere.radius;
   discriminant := b*b - a*c;
