@@ -1,12 +1,10 @@
-#foreign(include = "<stdio.h>")
-#foreign(include = "<stdlib.h>")
-#foreign(include = "<float.h>") // FLT_MAX
+import libc {malloc}
+
+#foreign(header = "<stdio.h>")
+#foreign(header = "<float.h>") // FLT_MAX
 
 @foreign
 var FLT_MAX : float;
-
-@foreign func printf(fmt: char const*, ...): int;
-@foreign func malloc(size: usize): void*;
 
 @foreign
 struct FILE;
@@ -20,7 +18,7 @@ struct FILE;
 // Math
 //
 
-#foreign(include = "<math.h>")
+#foreign(header = "<math.h>")
 
 @foreign func sqrtf(f: float): float;
 @foreign func cosf(f: float): float;

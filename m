@@ -1,16 +1,10 @@
 #!/bin/sh
 
 CXX="clang"
-SRC="src/"
-ENTRY="main"
-
-SRC_FILE=$SRC$ENTRY.ion
-C_FILE=$SRC$ENTRY.c
-
-ion $SRC_FILE
+ION_PKG="src"
 
 mkdir -p build
-mv $C_FILE build/
+ion $ION_PKG "build/main.c"
 
-$CXX build/$ENTRY.c -O2 -o "build/app"
+$CXX build/main.c -O2 -o "build/ray"
 
