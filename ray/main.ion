@@ -1,18 +1,9 @@
 import libc {malloc}
 
-#foreign(header = "<stdio.h>")
 #foreign(header = "<float.h>") // FLT_MAX
 
 @foreign
 var FLT_MAX : float;
-
-@foreign
-struct FILE;
-
-@foreign func fopen(filename: char const*, mode: char const*): FILE*;
-@foreign func fclose(stream: FILE*): int;
-@foreign func fwrite(buffer: void const*, size: usize, count: usize, stream: FILE*): usize;
-@foreign func putc(ch: int, stream: FILE*): int;
 
 struct ray_t {
   origin: v3;
@@ -42,11 +33,6 @@ struct world_t {
   spheres: sphere_t*;
   sphere_count: int;
   rng_state: uint32;
-}
-
-struct image_t {
-  width, height : int;
-  pixels: uint32*;
 }
 
 func point_on_ray(ray: ray_t*, t: float): v3 {
@@ -127,44 +113,6 @@ func camera_ray(c: camera_t*, u: float, v: float): ray_t {
   };
 }
 
-func pixels_size_for_image(width: int, height: int): usize {
-  return width * height * sizeof(uint32);
-}
-
-func write_tga(filename: char const*, img: image_t*) {
-  f := fopen(filename, "wb");
-  #assert(f);
-
-  putc(0, f); // id length
-  putc(0, f); // color map type
-  putc(2, f); // image type = uncompressed RGB
-
-  // color map specification
-  putc(0, f);
-  putc(0, f);
-  putc(0, f);
-  putc(0, f);
-  putc(0, f);
-
-  // origin
-  origin_x : uint16 = 0;
-  origin_y : uint16 = 0;
-  fwrite(&origin_x, sizeof(uint16), 1, f);
-  fwrite(&origin_y, sizeof(uint16), 1, f);
-
-  // width and height
-  width : uint16 = img.width;
-  height : uint16 = img.height;
-  fwrite(&width, sizeof(uint16), 1, f);
-  fwrite(&height, sizeof(uint16), 1, f);
-
-  putc(32, f); // bits per pixel
-  putc(0, f); // image descriptor
-
-  fwrite(img.pixels, pixels_size_for_image(img.width, img.height), 1, f);
-  fclose(f);
-}
-
 func round_f32_to_u32(f: float): uint32 {
   return (:uint32)(f + 0.5);
 }
@@ -176,14 +124,6 @@ func bgra_pack3(unpacked: v3): uint32 {
     (round_f32_to_u32(unpacked.y) << 8) |
     (round_f32_to_u32(unpacked.z) << 0)
   );
-}
-
-func alloc_image(width: int, height: int): image_t {
-  return {
-    width = width,
-    height = height,
-    pixels = malloc(pixels_size_for_image(width, height)),
-  };
 }
 
 func main(argc: int, argv: char**): int {
